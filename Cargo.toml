@@ -1,0 +1,11 @@
+[package]
+name = "rache"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+assert_cmd = "2.0.2"
+clap = "2.33.3"
+predicates = "3.1.2"
+structopt = "0.3.25"
+
