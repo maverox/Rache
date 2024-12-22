@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use rache::{server::Server, storage::LSMTree};
 
 #[tokio::main]

@@ -1,5 +1,5 @@
 use std::{fs, path::Path, sync::Arc};
-use super::{Wal, MemTable, SSTable};
+use super::{MemTable, SSTable, Wal};
 pub struct LSMTree {
     wal: Arc<Wal>,
     memtable: Arc<MemTable>,
@@ -18,12 +18,29 @@ impl LSMTree {
         compaction_threshold: usize,
     ) -> Result<Self, std::io::Error> {
         fs::create_dir_all(sstable_dir)?;
+        let mut ss_tables = Vec::new();
+        let wal_path = Path::new(wal_path);
+        let wal = Arc::new(Wal::new(wal_path)?);
+        let memtable = Arc::new(MemTable::new(memtable_max_size)); 
+        
+        memtable.load_from_wal(wal_path)?;
+        
+        // load existing SSTables in bloom filters
+        for i in 0.. {
+            let path = Path::new(sstable_dir).join(format!("sstable_{}.txt", i));
+            if !path.exists() {
+                break;
+            }
+            let ss_table = SSTable::load(&path)?;
+            ss_tables.push(ss_table);
+        }
+
         Ok(LSMTree {
-            wal: Arc::new(Wal::new(wal_path)?),
-            memtable: Arc::new(MemTable::new(memtable_max_size)),
+            wal,
+            memtable,
             sstable_dir: sstable_dir.to_string(),
-            sstable_counter: 0,
-            sstables: Vec::new(),
+            sstable_counter: ss_tables.len(),
+            sstables: ss_tables,
             compaction_threshold,
         })
     }
@@ -39,14 +56,17 @@ impl LSMTree {
         if self.memtable.is_full() {
             let sstable_path =
                 Path::new(&self.sstable_dir).join(format!("sstable_{}.txt", self.sstable_counter));
-            let keys = self.memtable.flush_to_sstable(&sstable_path)?;
-            let sstable = SSTable::new(keys, &sstable_path)?;
+
+            self.memtable.flush_to_sstable(&sstable_path)?;
+            let sstable = SSTable::new(&sstable_path)?;
             self.sstables.push(sstable);
             self.sstable_counter += 1;
+
             self.memtable = Arc::new(MemTable::new(self.memtable.max_size)); // Reset MemTable
 
             // Reset Wal 
             self.wal.reset()?;
+
             // Trigger compaction if too many SSTables
             if self.sstables.len() > self.compaction_threshold {
                 self.compact()?;
@@ -66,7 +86,7 @@ impl LSMTree {
         for (i, sstable) in self.sstables.iter().enumerate().rev() {
             if sstable.might_contain(key) {
                 let sstable_path = Path::new(&self.sstable_dir).join(format!("sstable_{}.txt", i));
-                if let Some(value) = SSTable::read(&sstable_path, key)? {
+                if let Some(value) = self.sstables[i].read(&sstable_path, key)? {
                     return Ok(Some(value));
                 }
             }
@@ -78,15 +98,17 @@ impl LSMTree {
     fn compact(&mut self) -> Result<(), std::io::Error> {
         let num_to_compact = self.compaction_threshold; // Compact the oldest two SSTables
         let mut sstable_paths = Vec::new();
-
+        let mut merged_file_extn = String::new();
+        
         for i in 0..num_to_compact {
             let path = Path::new(&self.sstable_dir).join(format!("sstable_{}.txt", i));
             sstable_paths.push(path);
+            merged_file_extn.push_str(&format!("{}", i));
         }
 
-        let output_path =
-            Path::new(&self.sstable_dir).join(format!("sstable_{}.txt", self.sstable_counter));
-        let keys = SSTable::merge(
+        let output_path = Path::new(&self.sstable_dir).join(format!("sstable_{}.txt", merged_file_extn));
+
+        SSTable::merge(
             &sstable_paths
                 .iter()
                 .map(|p| p.as_path())
@@ -96,13 +118,15 @@ impl LSMTree {
 
         // Replace old SSTables with the compacted one
         self.sstables.drain(0..num_to_compact);
-        self.sstables.push(SSTable::new(keys, &output_path)?);
+        self.sstables.push(SSTable::new(&output_path)?);
         self.sstable_counter += 1;
 
         // Remove old SSTable files
         for path in sstable_paths {
             fs::remove_file(path)?;
+            self.sstable_counter -= 1;
         }
+
         Ok(())
     }
 }
