@@ -45,6 +45,8 @@ impl LSMTree {
             self.sstable_counter += 1;
             self.memtable = Arc::new(MemTable::new(self.memtable.max_size)); // Reset MemTable
 
+            // Reset Wal 
+            self.wal.reset()?;
             // Trigger compaction if too many SSTables
             if self.sstables.len() > self.compaction_threshold {
                 self.compact()?;
