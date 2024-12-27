@@ -6,6 +6,7 @@ use std::{
 };
 
 use super::BloomFilter;
+use log::{info, warn};
 
 /// SSTable operations
 pub(super) struct SSTable {
@@ -16,6 +17,7 @@ pub(super) struct SSTable {
 impl SSTable {
     /// Create a new SSTable with a Bloom filter
     pub fn new(path: &Path) -> Result<Self, std::io::Error> {
+        info!("Creating new SSTable from path: {:?}", path);
         let mut bloom_filter = BloomFilter::new(1000);
         let mut index = BTreeMap::new();
         let file = File::open(path)?;
@@ -33,6 +35,7 @@ impl SSTable {
             offset += line.len() as u64 + 1; // +1 for newline character
         }
         index_file.flush()?;
+        info!("SSTable created successfully with {} entries", index.len());
 
         Ok(SSTable {
             bloom_filter,
@@ -42,6 +45,7 @@ impl SSTable {
 
     /// Load an existing SSTable and its Bloom filter
     pub(crate) fn load(path: &Path) -> Result<Self, std::io::Error> {
+        info!("Loading SSTable from path: {:?}", path);
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         let mut bloom_filter = BloomFilter::new(1000);
@@ -56,6 +60,7 @@ impl SSTable {
             }
             offset += line.len() as u64 + 1; // +1 for newline character
         }
+        info!("SSTable loaded successfully with {} entries", index.len());
 
         Ok(SSTable {
             bloom_filter,
@@ -65,10 +70,12 @@ impl SSTable {
     /// Check if a key might exist using the Bloom filter
     pub fn might_contain(&self, key: &str) -> bool {
         self.bloom_filter.might_contain(key)
+        info!("Checking if key '{}' might exist: {}", key, result);
     }
 
     /// Read a key from an SSTable
     pub fn read(&self, path: &Path, key: &str) -> Result<Option<String>, std::io::Error> {
+        info!("Reading key '{}' from SSTable at path: {:?}", key, path);
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
 
@@ -77,9 +84,11 @@ impl SSTable {
             let mut line = String::new();
             reader.read_line(&mut line)?;
             if let Some((_, v)) = line.split_once(':') {
+                info!("Key '{}' found with value: {}", key, v);
                 return Ok(Some(v.to_string()));
             }
         }
+        warn!("Key '{}' not found in SSTable", key);
         Ok(None)
     }
 
@@ -88,6 +97,7 @@ impl SSTable {
         sstable_paths: &[&Path],
         output_path: &Path,
     ) -> Result<(), std::io::Error> {
+        info!("Merging SSTables into new SSTable at path: {:?}", output_path);
         let file = File::create(output_path)?;
         let index_file = File::create(output_path.with_extension("index"))?;
         let mut writer = BufWriter::new(file);
@@ -96,6 +106,7 @@ impl SSTable {
 
         // Read all SSTables
         for path in sstable_paths {
+            info!("Reading SSTable from path: {:?}", path);
             let file = File::open(path)?;
             let reader = BufReader::new(file);
             for line in reader.lines() {

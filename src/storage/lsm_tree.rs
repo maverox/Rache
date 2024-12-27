@@ -1,5 +1,6 @@
 use std::{fs, path::Path, sync::Arc};
 use super::{MemTable, SSTable, Wal};
+use log::{info, warn};
 pub struct LSMTree {
     wal: Arc<Wal>,
     memtable: Arc<MemTable>,
@@ -17,6 +18,10 @@ impl LSMTree {
         memtable_max_size: usize,
         compaction_threshold: usize,
     ) -> Result<Self, std::io::Error> {
+        info!(
+            "Creating new LSMTree with wal_path: {}, sstable_dir: {}",
+            wal_path, sstable_dir
+        );
         fs::create_dir_all(sstable_dir)?;
         let mut ss_tables = Vec::new();
         let wal_path = Path::new(wal_path);
@@ -47,6 +52,7 @@ impl LSMTree {
 
     /// Write a key-value pair
     pub fn write(&mut self, key: String, value: String) -> Result<(), std::io::Error> {
+        info!("Writing key: {}, value: {}", key, value);
         // Append to Wal
         self.wal.append(&key, &value)?;
         // Insert into MemTable
@@ -56,6 +62,7 @@ impl LSMTree {
         if self.memtable.is_full() {
             let sstable_path =
                 Path::new(&self.sstable_dir).join(format!("sstable_{}.txt", self.sstable_counter));
+            warn!("MemTable is full, flushing to SSTable");
 
             self.memtable.flush_to_sstable(&sstable_path)?;
             let sstable = SSTable::new(&sstable_path)?;
@@ -69,6 +76,7 @@ impl LSMTree {
 
             // Trigger compaction if too many SSTables
             if self.sstables.len() > self.compaction_threshold {
+                warn!("Compaction triggered");
                 self.compact()?;
             }
         }
@@ -77,8 +85,10 @@ impl LSMTree {
 
     /// Read a key-value pair
     pub fn read(&self, key: &str) -> Result<Option<String>, std::io::Error> {
+        info!("Reading key: {}", key);
         // Check MemTable
         if let Some(value) = self.memtable.get(key) {
+            info!("Key: {} found in MemTable", key);
             return Ok(Some(value));
         }
 
@@ -87,14 +97,18 @@ impl LSMTree {
             if sstable.might_contain(key) {
                 let sstable_path = Path::new(&self.sstable_dir).join(format!("sstable_{}.txt", i));
                 if let Some(value) = self.sstables[i].read(&sstable_path, key)? {
+                    info!("Key: {} found in SSTable {:?}", key, &path);
                     return Ok(Some(value));
                 }
             }
         }
+        warn!("Key: {} not found", key);
         Ok(None)
     }
 
     /// Compact SSTables
+        info!("Loading levels...");
+                warn!("No SSTables found for level {}", i);
     fn compact(&mut self) -> Result<(), std::io::Error> {
         let num_to_compact = self.compaction_threshold; // Compact the oldest two SSTables
         let mut sstable_paths = Vec::new();
@@ -104,6 +118,7 @@ impl LSMTree {
             let path = Path::new(&self.sstable_dir).join(format!("sstable_{}.txt", i));
             sstable_paths.push(path);
             merged_file_extn.push_str(&format!("{}", i));
+        info!("Starting compaction");
         }
 
         let output_path = Path::new(&self.sstable_dir).join(format!("sstable_{}.txt", merged_file_extn));
@@ -129,4 +144,4 @@ impl LSMTree {
 
         Ok(())
     }
-}
+}        info!("Starting compaction");
