@@ -3,6 +3,11 @@ name = "rache"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["size_tiered"]
+size_tiered = []
+level_based = []
+
 [[bin]]
 name = "client"
 path = "src/bin/client.rs"

@@ -69,8 +69,9 @@ impl SSTable {
     }
     /// Check if a key might exist using the Bloom filter
     pub fn might_contain(&self, key: &str) -> bool {
-        self.bloom_filter.might_contain(key)
+        let result = self.bloom_filter.might_contain(key);
         info!("Checking if key '{}' might exist: {}", key, result);
+        result
     }
 
     /// Read a key from an SSTable
@@ -93,10 +94,7 @@ impl SSTable {
     }
 
     /// Merge multiple SSTables into one
-    pub fn merge(
-        sstable_paths: &[&Path],
-        output_path: &Path,
-    ) -> Result<(), std::io::Error> {
+    pub fn merge(sstable_paths: &[&Path], output_path: &Path) -> Result<(), std::io::Error> {
         info!("Merging SSTables into new SSTable at path: {:?}", output_path);
         let file = File::create(output_path)?;
         let index_file = File::create(output_path.with_extension("index"))?;
@@ -124,7 +122,7 @@ impl SSTable {
             let index_line = format!("{}:{}\n", key, offset);
             writer.write_all(ss_table_line.as_bytes())?;
             index_writer.write_all(index_line.as_bytes())?;
-            
+
             offset += ss_table_line.len() as u64;
         }
         writer.flush()?;
