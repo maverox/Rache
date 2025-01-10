@@ -67,7 +67,11 @@ impl LSMTree {
 
             self.memtable.flush_to_sstable(&sstable_path)?;
             let sstable = SSTable::new(&sstable_path)?;
-            self.levels[0].push(sstable);
+            if let Some(level) = self.levels.get_mut(0) {
+                level.push(sstable);
+            } else {
+                self.levels.push(vec![sstable]);
+            }
 
             self.memtable = Arc::new(MemTable::new(self.memtable.max_size)); // Reset MemTable
 
@@ -94,7 +98,7 @@ impl LSMTree {
 
         // Check SSTables (from newest to oldest)
         for (level_index, level) in self.levels.iter().enumerate() {
-            for (sstable_index, sstable) in level.iter().rev().enumerate() {
+            for (sstable_index, sstable) in level.iter().enumerate() {
                 let path = Path::new(&self.sstable_dir).join(format!("sstable_{}_{}.txt", level_index, sstable_index));
 
                 if !sstable.might_contain(key) {
