@@ -1,0 +1,11 @@
+# .clinerules
+
+## Project Intelligence
+
+- **Language:** Rust
+- **Storage Engine:** LSM Tree
+- **Memory Bank:** The memory bank is located in the `memory-bank/` directory.
+- **File Naming Convention:** Use descriptive names for files and directories.
+- **Code Style:** Follow Rust's coding conventions.
+- **Error Handling:** Use Rust's error handling mechanisms (Result, Option).
+- **Dependencies:** Manage dependencies using `Cargo.toml`.

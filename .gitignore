@@ -2,3 +2,4 @@
 Cargo.lock
 /sstables
 wal.log
+memory-bank/
